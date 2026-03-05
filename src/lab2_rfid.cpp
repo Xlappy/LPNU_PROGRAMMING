@@ -3,10 +3,8 @@
 #include <SPI.h>
 
 /**
- * Lab 2: RFID Access Control with LED feedback.
- * Pins for Arduino Uno:
- * RST: 9, SS (SDA): 10, MOSI: 11, MISO: 12, SCK: 13
- * LEDs: RED: 6, GREEN: 7, WHITE: 8
+ * Lab 2: RFID Access Control with smart programming.
+ * White LED blinks ONLY on the first write.
  */
 
 #define RST_PIN 9
@@ -18,9 +16,9 @@
 MFRC522 mfrc522(SS_PIN, RST_PIN);
 MFRC522::MIFARE_Key key;
 
-// REPLACE THIS WITH YOUR WHITE CARD UID (see serial monitor)
-// For example: {0xDE, 0xAD, 0xBE, 0xEF}
+// Use serial monitor to find your UID and replace this:
 byte trustedUID[] = {0xDE, 0xAD, 0xBE, 0xEF};
+const char *SECRET_DATA = "LPNU_LAB_2026_OK";
 
 void setup() {
   Serial.begin(9600);
@@ -31,7 +29,6 @@ void setup() {
   pinMode(GREEN_LED, OUTPUT);
   pinMode(WHITE_LED, OUTPUT);
 
-  // Initial state: White LED ON, others OFF
   digitalWrite(WHITE_LED, HIGH);
   digitalWrite(GREEN_LED, LOW);
   digitalWrite(RED_LED, LOW);
@@ -39,7 +36,7 @@ void setup() {
   for (byte i = 0; i < 6; i++)
     key.keyByte[i] = 0xFF;
 
-  Serial.println("System Ready: Put your card near reader...");
+  Serial.println("System Ready: Access Control Online.");
 }
 
 void loop() {
@@ -48,59 +45,64 @@ void loop() {
   if (!mfrc522.PICC_ReadCardSerial())
     return;
 
-  Serial.println("\n--- New Card Detected ---");
-  Serial.print("Card UID:");
+  Serial.println("\n--- Card Scan ---");
 
-  bool accessGranted = true;
-  for (byte i = 0; i < mfrc522.uid.size; i++) {
-    Serial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
-    Serial.print(mfrc522.uid.uidByte[i], HEX);
-
-    // Compare first 4 bytes for simplicity (classic MIFARE)
-    if (i < 4 && mfrc522.uid.uidByte[i] != trustedUID[i]) {
-      accessGranted = false;
-    }
+  bool isTrusted = true;
+  for (byte i = 0; i < 4; i++) {
+    if (mfrc522.uid.uidByte[i] != trustedUID[i])
+      isTrusted = false;
   }
-  Serial.println();
 
-  if (accessGranted) {
-    Serial.println("STATUS: ACCESS GRANTED! Welcome.");
+  if (!isTrusted) {
+    Serial.println("STATUS: [!] UNKNOWN CARD - ACCESS DENIED");
     digitalWrite(WHITE_LED, LOW);
-
-    // Mode: Writing/Programming simulation (LED Blinking)
-    Serial.println("ACTION: Updating card data... White LED blinking");
-    for (int i = 0; i < 6; i++) {
-      digitalWrite(WHITE_LED, !digitalRead(WHITE_LED));
-      delay(150);
-    }
+    digitalWrite(RED_LED, HIGH);
+    delay(3000);
+    digitalWrite(RED_LED, LOW);
+    digitalWrite(WHITE_LED, HIGH);
+  } else {
+    Serial.println("STATUS: [OK] TRUSTED CARD DETECTED");
 
     byte block = 4;
-    byte dataBlock[] = "LPNU_LAB_2026_OK";
+    byte buffer[18];
+    byte size = sizeof(buffer);
     MFRC522::StatusCode status;
 
     status = mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, block,
                                       &key, &(mfrc522.uid));
     if (status == MFRC522::STATUS_OK) {
-      status = mfrc522.MIFARE_Write(block, dataBlock, 16);
-      if (status == MFRC522::STATUS_OK) {
-        Serial.println("RESULT: Data recorded successfully.");
-        digitalWrite(WHITE_LED, LOW);
-        digitalWrite(GREEN_LED, HIGH);
-        delay(5000); // Wait 5 seconds as requested
-        digitalWrite(GREEN_LED, LOW);
+      // Read to check if already programmed
+      status = mfrc522.MIFARE_Read(block, buffer, &size);
+      bool alreadyProgrammed = (status == MFRC522::STATUS_OK &&
+                                strncmp((char *)buffer, SECRET_DATA, 16) == 0);
+
+      if (!alreadyProgrammed) {
+        Serial.println(
+            "ACTION: New Trusted Card! Programming... (Blinking White)");
+        for (int i = 0; i < 8; i++) {
+          digitalWrite(WHITE_LED, !digitalRead(WHITE_LED));
+          delay(150);
+        }
+        status = mfrc522.MIFARE_Write(block, (byte *)SECRET_DATA, 16);
+        if (status == MFRC522::STATUS_OK)
+          Serial.println("RESULT: Successfully programmed.");
+      } else {
+        Serial.println("ACTION: Card already programmed. Skipping write.");
       }
+
+      // Access Granted sequence
+      Serial.println("ACCESS GRANTED! Green Light.");
+      digitalWrite(WHITE_LED, LOW);
+      digitalWrite(GREEN_LED, HIGH);
+      delay(5000);
+      digitalWrite(GREEN_LED, LOW);
+      digitalWrite(WHITE_LED, HIGH);
+    } else {
+      Serial.print("AUTH ERROR: ");
+      Serial.println(mfrc522.GetStatusCodeName(status));
     }
-    digitalWrite(WHITE_LED, HIGH);
-  } else {
-    Serial.println("STATUS: ACCESS DENIED! Invalid Card.");
-    digitalWrite(WHITE_LED, LOW);
-    digitalWrite(RED_LED, HIGH);
-    delay(3000); // Show red for 3 seconds
-    digitalWrite(RED_LED, LOW);
-    digitalWrite(WHITE_LED, HIGH);
   }
 
-  Serial.println("SYSTEM: Back to IDLE state.");
   mfrc522.PICC_HaltA();
   mfrc522.PCD_StopCrypto1();
   delay(1000);
