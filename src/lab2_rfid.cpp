@@ -3,8 +3,8 @@
 #include <SPI.h>
 
 /**
- * Lab 2: RFID Access Control with smart programming.
- * White LED blinks ONLY on the first write.
+ * Lab 2: RFID Access Control with Auto-Learning.
+ * The FIRST card scanned after reset becomes the "Trusted" card.
  */
 
 #define RST_PIN 9
@@ -16,8 +16,9 @@
 MFRC522 mfrc522(SS_PIN, RST_PIN);
 MFRC522::MIFARE_Key key;
 
-// Use serial monitor to find your UID and replace this:
-byte trustedUID[] = {0xDE, 0xAD, 0xBE, 0xEF};
+// Self-learning logic
+byte trustedUID[4];
+bool hasMasterCard = false;
 const char *SECRET_DATA = "LPNU_LAB_2026_OK";
 
 void setup() {
@@ -36,7 +37,7 @@ void setup() {
   for (byte i = 0; i < 6; i++)
     key.keyByte[i] = 0xFF;
 
-  Serial.println("System Ready: Access Control Online.");
+  Serial.println("System Ready: First card scanned will become MASTER.");
 }
 
 void loop() {
@@ -47,6 +48,22 @@ void loop() {
 
   Serial.println("\n--- Card Scan ---");
 
+  // Learning Phase
+  if (!hasMasterCard) {
+    Serial.println("LEARNING MODE: Capturing master card UID...");
+    for (byte i = 0; i < 4; i++) {
+      trustedUID[i] = mfrc522.uid.uidByte[i];
+    }
+    hasMasterCard = true;
+    Serial.print("Master card set: ");
+    for (byte i = 0; i < 4; i++) {
+      Serial.print(trustedUID[i] < 0x10 ? " 0" : " ");
+      Serial.print(trustedUID[i], HEX);
+    }
+    Serial.println();
+  }
+
+  // Comparison Phase
   bool isTrusted = true;
   for (byte i = 0; i < 4; i++) {
     if (mfrc522.uid.uidByte[i] != trustedUID[i])
@@ -61,7 +78,7 @@ void loop() {
     digitalWrite(RED_LED, LOW);
     digitalWrite(WHITE_LED, HIGH);
   } else {
-    Serial.println("STATUS: [OK] TRUSTED CARD DETECTED");
+    Serial.println("STATUS: [OK] MASTER CARD DETECTED");
 
     byte block = 4;
     byte buffer[18];
@@ -77,8 +94,7 @@ void loop() {
                                 strncmp((char *)buffer, SECRET_DATA, 16) == 0);
 
       if (!alreadyProgrammed) {
-        Serial.println(
-            "ACTION: New Trusted Card! Programming... (Blinking White)");
+        Serial.println("ACTION: Programming Master Card... (Blinking White)");
         for (int i = 0; i < 8; i++) {
           digitalWrite(WHITE_LED, !digitalRead(WHITE_LED));
           delay(150);
@@ -87,7 +103,8 @@ void loop() {
         if (status == MFRC522::STATUS_OK)
           Serial.println("RESULT: Successfully programmed.");
       } else {
-        Serial.println("ACTION: Card already programmed. Skipping write.");
+        Serial.println(
+            "ACTION: Card already contains LPNU signature. Skipping write.");
       }
 
       // Access Granted sequence
@@ -103,6 +120,7 @@ void loop() {
     }
   }
 
+  Serial.println("SYSTEM: Waiting for next scan.");
   mfrc522.PICC_HaltA();
   mfrc522.PCD_StopCrypto1();
   delay(1000);
