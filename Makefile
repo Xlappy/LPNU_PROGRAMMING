@@ -25,27 +25,31 @@ help:
 
 build_dht: check_pio
 	@echo "Building Lab 1 (DHT11)..."
-	@mv src/lab2_rfid.cpp src/lab2_rfid.cpp.tmp 2>/dev/null || true
+	@mkdir -p src/inactive
+	@mv src/lab2_rfid.cpp src/inactive/ 2>/dev/null || true
 	@$(PIO) run -e uno
-	@mv src/lab2_rfid.cpp.tmp src/lab2_rfid.cpp 2>/dev/null || true
+	@mv src/inactive/lab2_rfid.cpp src/ 2>/dev/null || true
 
 build_rfid: check_pio
 	@echo "Building Lab 2 (RFID)..."
-	@mv src/lab1_dht11.cpp src/lab1_dht11.cpp.tmp 2>/dev/null || true
+	@mkdir -p src/inactive
+	@mv src/lab1_dht11.cpp src/inactive/ 2>/dev/null || true
 	@$(PIO) run -e uno
-	@mv src/lab1_dht11.cpp.tmp src/lab1_dht11.cpp 2>/dev/null || true
+	@mv src/inactive/lab1_dht11.cpp src/ 2>/dev/null || true
 
 upload_dht: check_pio
 	@echo "Uploading Lab 1..."
-	@mv src/lab2_rfid.cpp src/lab2_rfid.cpp.tmp 2>/dev/null || true
+	@mkdir -p src/inactive
+	@mv src/lab2_rfid.cpp src/inactive/ 2>/dev/null || true
 	@$(PIO) run -e uno --target upload
-	@mv src/lab2_rfid.cpp.tmp src/lab2_rfid.cpp 2>/dev/null || true
+	@mv src/inactive/lab2_rfid.cpp src/ 2>/dev/null || true
 
 upload_rfid: check_pio
 	@echo "Uploading Lab 2..."
-	@mv src/lab1_dht11.cpp src/lab1_dht11.cpp.tmp 2>/dev/null || true
+	@mkdir -p src/inactive
+	@mv src/lab1_dht11.cpp src/inactive/ 2>/dev/null || true
 	@$(PIO) run -e uno --target upload
-	@mv src/lab1_dht11.cpp.tmp src/lab1_dht11.cpp 2>/dev/null || true
+	@mv src/inactive/lab1_dht11.cpp src/ 2>/dev/null || true
 
 monitor:
 	$(PIO) device monitor
